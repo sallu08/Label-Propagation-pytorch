@@ -85,6 +85,7 @@ def grouper(iterable, n):
 
 def label_prop_prepare(dataset,frac): 
   label_index_size=int(len(dataset.data)*frac)
+  unlabel_index_size=int(len(dataset.data)-label_index_size)
   divs=int(len(dataset.data)/label_index_size)
   r=random.randint(1, divs)
   label_index=np.arange((r-1)*label_index_size,r*label_index_size)
@@ -123,8 +124,9 @@ test_data = datasets.MNIST(
 # call Label Prepare function
 label_index,unlabel_index,label_index_list,unlabel_index_list,batch_sampler = label_prop_prepare(training_data,frac=0.003)
 
-# Obtain labeled data subsets
+# Obtain labeled and unlabeled data subsets
 trainset_labeled = torch.utils.data.Subset(training_data, label_index_list)
+trainset_unlabeled = torch.utils.data.Subset(training_data, unlabel_index_list)
 
 
 # Create data loaders.
@@ -163,6 +165,7 @@ class NeuralNetwork(nn.Module):
         x = self.fc2(x)
 
         return F.log_softmax(x, dim=1)
+
 model = NeuralNetwork().to(device) #run model on GPU e.g.(device=cuda)
 
 
@@ -213,7 +216,8 @@ def train(dataloader, model,optimizer,p_weights,class_weights):
 
         if batch % 100 == 0:
             loss, current = loss.item(), batch * len(X)
-            print(f"training loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+            print(f"training loss: {loss:>7f} ")
+
 
 
 def test(dataloader, model):
@@ -256,12 +260,12 @@ def extract_features(train_loader,model):
         X = torch.autograd.Variable(X.cuda())
         y = torch.autograd.Variable(y.cuda())
         model.fc1.register_forward_hook(get_activation('fc1'))
+        output = model(X)
         feature=activation['fc1']
         embeddings_all.append(feature.data.cpu())
 
     embeddings_all = np.asarray(torch.cat(embeddings_all).numpy())
     return embeddings_all
-
 
 # Label Propagation Function
 def update_plabels(feat, k = 50, max_iter = 20):
@@ -270,7 +274,8 @@ def update_plabels(feat, k = 50, max_iter = 20):
         alpha = 0.99
         labels = all_labels
         labeled_idx = label_index
-    
+        unlabeled_idx = unlabel_index
+
         
         # kNN search for the graph
         d = feat.shape[1]
@@ -282,15 +287,20 @@ def update_plabels(feat, k = 50, max_iter = 20):
         normalize_L2(feat)
         index.add(feat) 
         N = feat.shape[0]
+        Nidx = index.ntotal
+
+        # c = time.time()
         D, I = index.search(feat, k + 1)
-     
+        # elapsed = time.time() - c
+        # print('kNN Search done in %d seconds' % elapsed)
+
         # Create the graph
         D = D[:,1:] ** 3
         I = I[:,1:]
         row_idx = np.arange(N)
         row_idx_rep = np.tile(row_idx,(k,1)).T
-        W = scipy.sparse.csr_matrix((D.flatten('F'), (row_idx_rep.flatten('F'), I.flatten('F'))), shape=(N, N))
-        W = W + W.T
+        W = scipy.sparse.csr_matrix((D.flatten('F'), (row_idx_rep.flatten('F'), I.flatten('F'))), shape=(N, N)) #eq 9
+        W = W + W.T  #make matrix symmetric
 
         # Normalize the graph
         W = W - scipy.sparse.diags(W.diagonal())
@@ -308,7 +318,7 @@ def update_plabels(feat, k = 50, max_iter = 20):
             y = np.zeros((N,))
             y[cur_idx] = 1.0 / cur_idx.shape[0]
             f, _ = scipy.sparse.linalg.cg(A, y, tol=1e-6, maxiter=max_iter)
-            Z[:,i] = f
+            Z[:,i] = f   #eq 10
 
         # Handle numberical errors
         Z[Z < 0] = 0 
@@ -318,13 +328,13 @@ def update_plabels(feat, k = 50, max_iter = 20):
         probs_l1[probs_l1 <0] = 0
         entropy = scipy.stats.entropy(probs_l1.T)
         weights = 1 - entropy / np.log(num_classes)
-        weights = weights / np.max(weights)
+        weights = weights / np.max(weights)   #eq 11
         p_labels = np.argmax(probs_l1,1)
 
         # Compute the accuracy of pseudolabels for statistical purposes
         correct_idx = (p_labels == labels)
         acc = correct_idx.mean()
-        print(f'Label Propagation accuracy= {acc:>0.2f}%')
+        print(f'Label Propagation accuracy= {acc*100:>0.2f}%')
 
         p_labels[labeled_idx] = labels[labeled_idx]
         weights[labeled_idx] = 1.0
@@ -338,7 +348,6 @@ def update_plabels(feat, k = 50, max_iter = 20):
             class_weights[i] = (float(labels.shape[0]) / (num_classes)) / cur_idx.size
 
         return p_labels,p_weights,class_weights
-
 
 global_epochs = 10
 for t in range(global_epochs):
