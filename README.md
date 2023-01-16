@@ -8,6 +8,6 @@ This code is simplified implementation of
 Original Code: https://github.com/ahmetius/LP-DeepSSL
 
 Coogle Colab Notebook of my code is available at
-    https://colab.research.google.com/drive/1rruP9-2k6vLRAYGoqSh9bhdz1oaZcagO
+    https://colab.research.google.com/drive/1rruP9-2k6vLRAYGoqSh9bhdz1oaZcagO#scrollTo=7SZLFptiHa8g
 """
 
