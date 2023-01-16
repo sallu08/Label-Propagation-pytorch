@@ -1,11 +1,8 @@
-
 """
 @author: Muhammad Suleman
 This code is simplified implementation of
-
  "A. Iscen, G. Tolias, Y. Avrithis, O. Chum. "Label Propagation for Deep Semi-supervised Learning", CVPR 2019
 Original Code: https://github.com/ahmetius/LP-DeepSSL
-
 Coogle Colab Notebook of this code is available at
     https://colab.research.google.com/drive/1rruP9-2k6vLRAYGoqSh9bhdz1oaZcagO#scrollTo=7SZLFptiHa8g
 """
@@ -85,7 +82,6 @@ def grouper(iterable, n):
 
 def label_prop_prepare(dataset,frac): 
   label_index_size=int(len(dataset.data)*frac)
-  unlabel_index_size=int(len(dataset.data)-label_index_size)
   divs=int(len(dataset.data)/label_index_size)
   r=random.randint(1, divs)
   label_index=np.arange((r-1)*label_index_size,r*label_index_size)
@@ -192,7 +188,6 @@ optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 # define train function 
 def train(dataloader, model,optimizer,p_weights,class_weights):
 
-    size = len(dataloader.dataset)
     model.train()
 
     for batch, ((X,y), p_weights_b,c_weights_b) in enumerate(zip(dataloader, p_weights,class_weights)):
@@ -217,7 +212,6 @@ def train(dataloader, model,optimizer,p_weights,class_weights):
         if batch % 100 == 0:
             loss, current = loss.item(), batch * len(X)
             print(f"training loss: {loss:>7f} ")
-
 
 
 def test(dataloader, model):
@@ -260,7 +254,6 @@ def extract_features(train_loader,model):
         X = torch.autograd.Variable(X.cuda())
         y = torch.autograd.Variable(y.cuda())
         model.fc1.register_forward_hook(get_activation('fc1'))
-        output = model(X)
         feature=activation['fc1']
         embeddings_all.append(feature.data.cpu())
 
@@ -269,12 +262,10 @@ def extract_features(train_loader,model):
 
 # Label Propagation Function
 def update_plabels(feat, k = 50, max_iter = 20):
-
-       
+      
         alpha = 0.99
         labels = all_labels
         labeled_idx = label_index
-        unlabeled_idx = unlabel_index
 
         
         # kNN search for the graph
@@ -287,12 +278,11 @@ def update_plabels(feat, k = 50, max_iter = 20):
         normalize_L2(feat)
         index.add(feat) 
         N = feat.shape[0]
-        Nidx = index.ntotal
 
-        # c = time.time()
+
+
         D, I = index.search(feat, k + 1)
-        # elapsed = time.time() - c
-        # print('kNN Search done in %d seconds' % elapsed)
+
 
         # Create the graph
         D = D[:,1:] ** 3
@@ -348,6 +338,7 @@ def update_plabels(feat, k = 50, max_iter = 20):
             class_weights[i] = (float(labels.shape[0]) / (num_classes)) / cur_idx.size
 
         return p_labels,p_weights,class_weights
+
 
 global_epochs = 10
 for t in range(global_epochs):
