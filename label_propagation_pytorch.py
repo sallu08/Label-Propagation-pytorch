@@ -245,7 +245,7 @@ def get_activation(name):
 
 # Function for extracting features
 def extract_features(train_loader,model):
-   
+    model.eval()
     embeddings_all= []
     for i, (batch_input, target) in enumerate(train_loader):
     
